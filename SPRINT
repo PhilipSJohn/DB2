@@ -1,0 +1,652 @@
+       ID           DIVISION.
+       PROGRAM-ID. SPRINT.
+      ***************************************************************
+      * THIS IS A PROGRAM FOR LOAN PROCESSING.                      *
+      * -INFILE CONTAINS THE TRANSACTION DETAILS OF THE USER INPUT  *   S *
+      * -OUTFILE IS THE UNPROCESSED FILE WHICH CONTAINS THE ERROR   *
+      * AUTHOR : TEAM 1(PHILIP, SAURAV JHA, SHANMUGA PRIYA)         *
+      * DATE COMPILE : 03/10/2019                                   *
+      ***************************************************************
+       ENVIRONMENT  DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+            SELECT INFILE ASSIGN      TO DD1
+            ORGANIZATION IS SEQUENTIAL
+            ACCESS MODE  IS SEQUENTIAL
+            FILE STATUS  IS WS-FS1.
+            SELECT UNPROCESSED ASSIGN TO DD2
+            FILE STATUS  IS WS-FS2.
+       DATA         DIVISION.
+       FILE         SECTION.
+       FD INFILE.
+      *REC1 REFERS TO THE CUSTOMER ADD
+       01 REC1.
+          05 FS-A1          PIC XX.
+          05 FS-CUSTID1     PIC X(5).
+          05 FS-CUSTNAME1   PIC X(10).
+          05 FS-ADDR1       PIC X(20).
+          05                PIC X(43).
+      *REC2 REFERS TO THE CUSTOMER UPDATE ADDRESS
+       01 REC2.
+          05 FS-A2          PIC XX.
+          05 FS-CUSTID2     PIC X(5).
+          05 FS-ADDR2       PIC X(20).
+          05                PIC X(53).
+      *REC3 REFERS TO THE DELETING CUSTOMER DETAILS
+       01 REC3.
+          05 FS-A3          PIC XX.
+          05 FS-CUSTID3     PIC X(5).
+          05                PIC X(73).
+      *REC4 REFERS TO THE LOAN PAYMENT
+       01 REC4.
+          05 FS-A4          PIC XX.
+          05 FS-CUSTID4     PIC X(5).
+          05 FS-LTYPE4      PIC X(2).
+          05 FS-LAMT4       PIC 9(7).
+          05                PIC X(64).
+      *REC5 REFERS TO THE LOAN RE-PAYMENT
+       01 REC5.
+          05 FS-A5          PIC XX.
+          05 FS-CUSTID5     PIC X(5).
+          05 FS-LTYPE5      PIC X(2).
+          05 FS-LID5        PIC X(5).
+          05 FS-LAMT5       PIC 9(7).
+          05                PIC X(59).
+       FD UNPROCESSED.
+       01 OUTREC            PIC X(80).
+
+       WORKING-STORAGE SECTION.
+           EXEC SQL
+                INCLUDE CUSTOMER
+           END-EXEC.
+           EXEC SQL
+                INCLUDE LOAN
+           END-EXEC.
+           EXEC SQL
+                INCLUDE LOANTRAN
+           END-EXEC.
+           EXEC SQL
+                INCLUDE SQLCA
+           END-EXEC.
+
+       77 WS-FS1               PIC 99.
+       77 WS-FS2               PIC 99.
+       77 WS-FS3               PIC 99.
+       01 WS-PGM               PIC X(08) VALUE 'SPRINT'.
+      *WS-UPS IS TO WRITE IN OUTREC IN THE FORMAT BELOW
+       01 WS-UPS.
+          05 REC               PIC X(35).
+          05 DEF               PIC X(25).
+          05 ABS               PIC X(9).
+          05                   PIC X(11).
+       01 TEMP                 PIC 9(6).
+      *CNTR TO CHECK IS THERE > 5 LOANS FOR THE GIVEN CUSTOMER
+       01 CNTR                 PIC 99.
+       01 CNT                  PIC 9 VALUE ZEROS.
+      *DATE1 AND DATE2 TO PRINT CLOSING DATE IN FORMAT
+       01 DATE1.
+          05 YY                PIC 99.
+          05 MM                PIC 99.
+          05 DD                PIC 99.
+       01 DATE2.
+          05 YY1               PIC 9999 VALUE ZEROS.
+          05                   PIC X    VALUE '-'.
+          05 MM1               PIC 99   VALUE ZEROS.
+          05                   PIC X    VALUE '-'.
+          05 DD1               PIC 99   VALUE ZEROS.
+       01 R                   PIC S99V99.
+       01 T                   PIC 9.
+       01 X                   PIC X.
+       01 WS-ARR.
+          05 ARR              PIC X(5) OCCURS 2 TIMES.
+       01 AC                  PIC 9 VALUE 0.
+       01 INPUT-VAR           PIC X(5).
+
+       PROCEDURE    DIVISION.
+       MAIN-PARA.
+            OPEN INPUT INFILE
+            IF WS-FS1 NOT = 0
+              DISPLAY " OPEN OF INFILE FAILED WITH " WS-FS1
+            END-IF
+            OPEN OUTPUT UNPROCESSED
+            IF WS-FS2 NOT = 0
+              DISPLAY " OPEN OF OUTFILE FAILED WITH " WS-FS2
+            END-IF
+      * READ TRANSACTION FILE TILL THE END
+            PERFORM PARA1 UNTIL WS-FS1 NOT = 0
+            CLOSE INFILE
+            IF WS-FS1 NOT = 0
+              DISPLAY " CLOSE OF INFILE FAILED WITH " WS-FS1
+            END-IF
+            CLOSE UNPROCESSED
+            IF WS-FS2 NOT = 0
+              DISPLAY " CLOSE OF OUTFILE FAILED WITH " WS-FS2
+            END-IF
+      *     CALL WS-PGM
+            STOP RUN.
+       PARA1.
+            READ INFILE
+            NOT AT END
+      * CHECKING FOR CUSTOMER ADD
+               IF FS-A1 = '01'
+                  PERFORM I-PARA
+               END-IF
+      * CHECKING FOR CUSTOMER UPDATE
+               IF FS-A2 = '02'
+                  PERFORM U-PARA
+               END-IF
+      * CHECKING FOR CUSTOMER DELETE
+               IF FS-A3 = '03'
+                  PERFORM D-PARA
+               END-IF
+      * CHECKING FOR CUSTOMER LOAN DETAILS
+               IF FS-A4 = '04'
+                  PERFORM L-PARA
+               END-IF
+      * CHECKING FOR REPAYMENT OF LOAN
+               IF FS-A5 = '05'
+                  PERFORM R-PARA
+               END-IF
+      * CHECKING IF TYPE WAS GIVEN AT ALL
+               IF FS-A5 = SPACES
+                  MOVE REC1           TO REC
+                  MOVE 'TYPE MISSING' TO DEF
+                  WRITE OUTREC FROM WS-UPS
+               END-IF
+      * CHECKING IF TYPE GIVEN IS VALID OR NOT
+               IF     FS-A1 NOT = '01' AND FS-A2 NOT = '02'
+                  AND FS-A3 NOT = '03' AND FS-A4 NOT = '04'
+                  AND FS-A5 NOT = '05' AND FS-A5 NOT = SPACES
+                  MOVE REC1  TO REC
+                  MOVE FS-A1 TO ABS
+                  MOVE 'INVALID INPUT. TYPE ID:' TO DEF
+                  WRITE OUTREC FROM WS-UPS
+               END-IF.
+
+      * ADDING DETAILS TO CUSTOMER TABLE
+      * THE HV- DETAILS ARE FOR THE CUSTOMER TABLE PARAMETERS
+       I-PARA.
+      * MOVING DETAILS TO SQL PARAMETERS
+            MOVE FS-CUSTID1   TO HV-CID
+            MOVE FS-CUSTNAME1 TO HV-NAME
+            MOVE FS-ADDR1     TO HV-ADDR-TEXT
+            MOVE LENGTH OF HV-ADDR-TEXT TO HV-ADDR-LEN
+      * CHECK IF ID IS GIVEN OR NOT
+            IF FS-CUSTID1 NOT = SPACES
+             MOVE FS-CUSTID1 TO INPUT-VAR
+             PERFORM COUNTSPACES
+             IF AC IS EQUAL TO 1
+      * CHECK IF NAME IS GIVEN OR NOT
+               IF FS-CUSTNAME1 NOT = SPACES
+      * CHECK IF ADDRESS IS GIVEN OR NOT
+                  IF FS-ADDR1 NOT = SPACES
+                      EXEC SQL
+                          INSERT INTO CUSTOMER
+                          VALUES (:HV-CID,:HV-NAME,:HV-ADDR)
+                      END-EXEC
+                      IF SQLCODE = 0
+                         DISPLAY 'INSERTED'
+                      ELSE
+                         PERFORM DI-PARA
+                      END-IF
+                   ELSE
+                      PERFORM AI-PARA
+                   END-IF
+               ELSE
+                   PERFORM NM-PARA
+               END-IF
+             ELSE
+                MOVE REC1 TO REC
+                DISPLAY AC
+                MOVE 'ID INCORRECT. ID:' TO DEF
+                MOVE FS-CUSTID1 TO ABS
+                WRITE OUTREC FROM WS-UPS
+             END-IF
+            ELSE
+              PERFORM ID-PARA
+            END-IF.
+
+      * DI IS FOR DUPLICATE ID ERROR AND SEND TO UNPROCESSED FILE
+       DI-PARA.
+            MOVE REC1            TO REC
+            MOVE 'DUPLICATE ID:' TO DEF
+            MOVE HV-CID          TO ABS
+            WRITE OUTREC FROM WS-UPS.
+
+      * AI IS FOR ADDRESS MISSING ERROR AND SEND TO UNPROCESSED FILE
+       AI-PARA.
+            MOVE REC1              TO REC
+            MOVE 'ADDRESS MISSING' TO DEF
+            MOVE HV-ADDR-TEXT      TO ABS
+            WRITE OUTREC FROM WS-UPS.
+
+      * NM IS FOR NAME MISSING ERROR AND SEND DETAILS TO UNPROCESSED
+      * FILE
+       NM-PARA.
+            MOVE REC1           TO REC
+            MOVE 'NAME MISSING' TO DEF
+            MOVE HV-NAME        TO ABS
+            WRITE OUTREC FROM WS-UPS.
+
+      * ID IS FOR CHECKING IF ID MISSING OR INCORRECT ID ERROR AND MOVE
+      * DETAILS TO UNPROCESSED FILE
+       ID-PARA.
+            MOVE REC1         TO REC
+            IF HV-CID = SPACES
+            MOVE 'ID MISSING ' TO DEF
+            ELSE
+            MOVE 'ID WRONG:'  TO DEF
+            END-IF
+            MOVE HV-CID       TO ABS
+            WRITE OUTREC FROM WS-UPS.
+
+      * TO UPGRADE THE DETAILS OF ADDRESS IN CUSTOMER TABLE
+      * THE HV- DETAILS ARE FOR THE CUSTOMER TABLE PARAMETERS
+       U-PARA.
+            MOVE FS-CUSTID2 TO HV-CID
+            MOVE FS-ADDR2   TO HV-ADDR-TEXT
+            MOVE LENGTH OF HV-ADDR-TEXT TO HV-ADDR-LEN
+      * CHECK IF ID IS GIVEN OR NOT
+            IF FS-CUSTID2 NOT = SPACES
+      * CHECK IF ID IS A VALID FROM CUSTOMER TABLE
+            PERFORM CHECK-PARA
+              IF SQLCODE = 0
+      * CHECK IF ADDRESS IS GIVEN OR NOT
+               IF FS-ADDR2 NOT = SPACES
+                      EXEC SQL
+                           UPDATE CUSTOMER
+                           SET ADDR = :HV-ADDR
+                           WHERE CID = :HV-CID
+                      END-EXEC
+                      IF SQLCODE = 0
+                         DISPLAY 'UPDATED'
+                      ELSE
+                         DISPLAY 'SQL' SQLCA
+                      END-IF
+               ELSE
+                   PERFORM AI-PARA
+               END-IF
+              ELSE
+      * MOVING INVAID DETAILS TO UNPROCESSED FILE
+               MOVE REC2             TO REC
+               MOVE 'WRONG ID . ID:' TO DEF
+               MOVE HV-CID           TO ABS
+               WRITE OUTREC FROM WS-UPS
+            ELSE
+              PERFORM ID-PARA
+            END-IF.
+
+      * CHECKING WITH REFERENCE TO CUSTOMER TABLE
+       CHECK-PARA.
+            EXEC SQL
+                 SELECT CID INTO :HV-CID
+                 FROM CUSTOMER
+                 WHERE CID = :HV-CID
+            END-EXEC.
+
+      * TO DELETE ANY CUSTOMER FROM THE TABLE IF HE/SHE DOESNT HAVE ANY
+      * OUTSTANDING LOAN
+      * THE HV- DETAILS ARE FOR THE CUSTOMER TABLE PARAMETERS
+       D-PARA.
+            MOVE FS-CUSTID3 TO HV-CID
+      * CHECK IF ID IS GIVEN OR NOT
+            IF FS-CUSTID3 NOT = SPACES
+      * CHECK IF ID IS A VALID FROM CUSTOMER TABLE
+               PERFORM CHECK-PARA
+               IF SQLCODE NOT = 0
+      * IF ID IS NOT PRESENT THEN SEND DETAILS TO UNPROCESSED FILE
+                  MOVE REC2        TO REC
+                  MOVE 'WRONG ID:' TO DEF
+                  MOVE FS-CUSTID3  TO ABS
+                  WRITE OUTREC FROM WS-UPS
+               ELSE
+                EXEC SQL
+                     SELECT STATUS INTO :HV1-STATUS
+                     FROM LOANTRANS
+                     WHERE CID = :HV-CID
+                END-EXEC
+      * HV1- REFERS TO LOAN TRANSACTION PARAMETER DETAILS
+                MOVE HV1-STATUS TO X
+      * IF CUSTOMER HAS ANY OUTSTANDING LOANS THEN DO NOT DELETE
+                  IF X NOT = 'O'
+                     IF X = 'C'
+                        EXEC SQL
+                             DELETE FROM LOANTRANS
+                             WHERE CID = :HV-CID
+                        END-EXEC
+                     END-IF
+                     EXEC SQL
+                          DELETE FROM CUSTOMER
+                          WHERE CID = :HV-CID
+                     END-EXEC
+                     IF SQLCODE = 0
+                        DISPLAY 'DELETED'
+                     ELSE
+                        DISPLAY 'SQLCAD' SQLCA
+                     END-IF
+                  ELSE
+                     PERFORM OL-PARA
+                  END-IF
+               END-IF
+            ELSE
+               PERFORM ID-PARA
+            END-IF.
+
+      * MOVE ERROR DETAILS TO TRANSACTION FILE IF LOAN IS OUTSTANDING
+       OL-PARA.
+            MOVE REC3                 TO REC
+            MOVE 'LOAN NOT PAID. ID:' TO DEF
+            MOVE FS-CUSTID3           TO ABS
+            WRITE OUTREC FROM WS-UPS.
+
+      * TO GIVE LOAN TO ANY CUSTOMER IF HE/SHE IS IN CUSTOMER TABLE
+      * THE HV1- DETAILS ARE FOR THE LOAN TRANSACTION TABLE PARAMETERS
+       L-PARA.
+            MOVE FS-CUSTID4 TO HV1-CID
+            EXEC SQL
+                 SELECT CID INTO :HV1-CID
+                 FROM CUSTOMER
+                 WHERE CID = :HV1-CID
+            END-EXEC
+      * CHECK IF ID IS A VALID FROM CUSTOMER TABLE OR MISSING FROM INPUT
+            IF SQLCODE NOT = 0
+            MOVE REC4 TO REC
+               IF FS-CUSTID4 NOT = SPACES
+               MOVE 'INCORRECT ID:' TO DEF
+               MOVE FS-CUSTID4      TO ABS
+               ELSE
+               MOVE 'ID MISSING'    TO DEF
+               MOVE FS-CUSTID4      TO ABS
+               END-IF
+               WRITE OUTREC FROM WS-UPS
+            ELSE
+               MOVE FS-LTYPE4 TO HV1-TYPE
+            EXEC SQL
+                 SELECT TYPE INTO :HV1-TYPE
+                 FROM LOAN
+                 WHERE TYPE = :HV1-TYPE
+            END-EXEC
+      * CHECK IF LOAN TYPE IS VALID/MISSING/NOT THERE IN LOAN TABLE
+            IF SQLCODE NOT = 0
+            MOVE REC4 TO REC
+              IF HV1-TYPE = SPACES
+               MOVE 'TYPE MISSING' TO DEF
+               MOVE FS-LTYPE4      TO ABS
+              ELSE
+               MOVE 'WRONG TYPE:'  TO DEF
+               MOVE FS-LTYPE4      TO ABS
+              END-IF
+               WRITE OUTREC FROM WS-UPS
+            ELSE
+               MOVE 'O' TO HV1-STATUS
+               EXEC SQL
+                    SELECT CID INTO :HV1-CID
+                    FROM LOANTRANS
+                    WHERE CID = :HV1-CID
+                    AND STATUS = :HV1-STATUS
+                    AND TYPE = :HV1-TYPE
+               END-EXEC
+      * CHECK IF THERE EXSITS ANY LOAN OF THE SAME TYPE AND IS STILL
+      * OUTSTANDING DEBT
+               IF SQLCODE = 0
+                  MOVE REC4                     TO REC
+                  MOVE 'PAY PREVIOUS LOAN. ID:' TO DEF
+                  MOVE FS-CUSTID4               TO ABS
+                  WRITE OUTREC FROM WS-UPS
+               ELSE
+      * TO KEEP COUNT OF THE LOANS WE TAKE THE LAST VALUE AND STORE
+      * IT INTO HV1-OUTAMT. HERE HV1-OUTAMT IS A TEMPORARY VARIABLE TO
+      * KEEP THE COUNT VALUE TILL IS IT MOVED TO A COUNTER VARIABLE(CNTR
+               EXEC SQL
+                    SELECT MAX(LNO) INTO :HV1-OUTAMT FROM LOANTRANS
+               END-EXEC
+               MOVE HV1-OUTAMT TO CNTR
+      * TO COUNT THE NUMBER OF LOANS TAKEN BY THE CUSTOMER
+      * USE THE SAME TEMPORARY VARIABLE HV1-OUTAMT AND STORE TO ANOTHER
+      * COUNT VARIABLE
+             EXEC SQL
+                    SELECT COUNT(:HV1-CID) INTO :HV1-OUTAMT
+                    FROM LOANTRANS
+                    WHERE CID = :HV1-CID
+                    AND STATUS = :HV1-STATUS
+               END-EXEC
+      * TO CHECK IF AMOUNT IS NUMERIC OR IF THEY ARE SPACES/NON-NUMERIC
+               IF FS-LAMT4 IS NOT NUMERIC
+               MOVE REC4 TO REC
+                  IF FS-LAMT4 = SPACES
+                     MOVE 'MISSING AMOUNT' TO DEF
+                     MOVE FS-LAMT4         TO ABS
+                     WRITE OUTREC FROM WS-UPS
+                  ELSE
+                     MOVE 'INVALID AMOUNT' TO DEF
+                     MOVE FS-LAMT4         TO ABS
+                     WRITE OUTREC FROM WS-UPS
+                  END-IF
+               ELSE
+      * TO CHECK IF THE CUSTOMER HAS MORE THAN 5 LOANS
+               IF HV1-OUTAMT < 5
+                  DISPLAY HV1-TYPE
+      * TO TAKE RATE FROM LOAN TABLE FOR LOAN TYPE AND MOVE TO R
+                  EXEC SQL
+                       SELECT ROI INTO :HV-ROI
+                       FROM LOAN
+                       WHERE TYPE = :HV1-TYPE
+                  END-EXEC
+                  MOVE HV-ROI TO R
+      * TO TAKE TERM FROM LOAN TABLE FOR LOAN TYPE AND MOVE TO T
+                  EXEC SQL
+                    SELECT TERM INTO :HV-TERM
+                    FROM LOAN
+                    WHERE TYPE = :HV1-TYPE
+                  END-EXEC
+                  MOVE HV-TERM TO T
+      * TO ACCESS THE MAX LOAN AMOUNT THAT CAN BE GIVEN
+                  EXEC SQL
+                    SELECT MAXLOANAMT INTO :HV-MAXLOANAMT
+                    FROM LOAN
+                    WHERE TYPE = :HV1-TYPE
+                  END-EXEC
+      * TO CHECK IF ASKED AMOUNT IS GREATER THAN LOAN AMOUNT
+      * IF TRUE PERFORM ERROR PROCESS ELSE PERFORM THE CALCULATION
+                  IF FS-LAMT4 > HV-MAXLOANAMT
+                  PERFORM NOLOAN-PARA
+      * TO MAKE SURE THAT THE LOAN IS NOT GIVEN
+                  MOVE 0 TO TEMP
+                  ELSE
+                  PERFORM CALC
+                  END-IF
+      * ACCESS LOAN ID FROM LOAN TABLE
+               EXEC SQL
+                    SELECT LID INTO :HV1-LID
+                    FROM LOAN
+                    WHERE TYPE = :HV1-TYPE
+               END-EXEC
+      * CHECK IF LOAN WAS GIVEN OR NOT
+               IF TEMP NOT = 0
+      * MOVE OUTSTANDING TO STATUS
+                  MOVE 'O' TO HV1-STATUS
+      * FOR NEXT LOAN NUMBER ADD 1 AND MOVE
+                  ADD 1 TO CNTR
+                  MOVE CNTR TO HV1-LNO
+                  DISPLAY CNTR
+                  EXEC SQL
+                       INSERT INTO LOANTRANS (LNO,CID,LID,TYPE,STATUS,
+      -                OUTAMT)
+                       VALUES (:HV1-LNO,:HV1-CID,:HV1-LID,:HV1-TYPE,
+      -                :HV1-STATUS,:HV1-OUTAMT)
+                  END-EXEC
+                  IF SQLCODE = 0
+                     DISPLAY 'INSERTED'
+                  ELSE
+                     DISPLAY 'NOT' SQLCA
+                  END-IF
+               END-IF
+            ELSE
+      * TO MOVE TO ERROR PROCESS FILE IF LOAN LIMIT HAS BEEN REACHED
+               MOVE REC4                      TO REC
+               MOVE 'LOAN LIMIT REACHED. ID:' TO DEF
+               MOVE FS-CUSTID4                TO ABS
+               WRITE OUTREC FROM WS-UPS
+              END-IF
+              END-IF
+             END-IF
+             END-IF
+            END-IF.
+
+      * FOR CALCULATION OF LOAN
+       CALC.
+            COMPUTE TEMP = FS-LAMT4 + ( FS-LAMT4 * R * T ) / 100
+            DISPLAY TEMP
+            DISPLAY R " " T
+            MOVE TEMP TO HV1-OUTAMT.
+
+      * ERROR FILE FOR NO LOAN GIVEN
+       NOLOAN-PARA.
+            MOVE REC4                     TO REC
+            MOVE 'AMT EXCEEDS LOAD TYPE:' TO DEF
+            MOVE FS-LAMT4                 TO ABS
+            WRITE OUTREC FROM WS-UPS.
+
+      * FOR ACCESSING CLOSING DATE IN YYYY-MM-DD FORMAT
+       DATE-PARA.
+            ACCEPT DATE1 FROM DATE
+            MOVE YY  TO YY1
+            ADD 2000 TO YY1
+            MOVE MM  TO MM1
+            MOVE DD  TO DD1.
+
+      * TO CALCULATE LOAN REPLAYMENT FOR THE CUSTOMER
+      * HV- REFERS TO PARAMETERS AT LOAN AND CUSTOMER TABLE
+      * HV1- REFERS TO PARAMETERS AT LOAN TRANSACTION TABLE
+       R-PARA.
+            MOVE FS-CUSTID5 TO HV-CID
+            MOVE FS-LTYPE5  TO HV-TYPE
+            MOVE FS-LID5    TO HV-LID
+            MOVE FS-LAMT5   TO HV1-OUTAMT
+      * CHECK IF ID IS GIVEN OR MISSING FROM INPUT
+            IF FS-CUSTID5 NOT = SPACES
+      * CHECK IF ID IS PRESENT IN CUSTOMER TABLE
+            EXEC SQL
+                 SELECT CID INTO :HV1-CID
+                 FROM CUSTOMER
+                 WHERE CID = :HV-CID
+            END-EXEC
+            IF SQLCODE NOT = 0
+               MOVE REC5        TO REC
+               MOVE 'WRONG ID:' TO DEF
+               DISPLAY SQLCODE
+               MOVE FS-CUSTID5  TO ABS
+               WRITE OUTREC FROM WS-UPS
+            ELSE
+      * CHECK IF LOAN TYPE IS MISSING OR NOT
+            IF FS-LTYPE5 NOT = SPACES
+      * CHECK IF GIVEN LOAN TYPE IS IN LOAN TABLE
+            EXEC SQL
+                 SELECT TYPE INTO :HV1-TYPE
+                 FROM LOAN
+                 WHERE TYPE = :HV-TYPE
+            END-EXEC
+            IF SQLCODE NOT = 0
+               MOVE REC5          TO REC
+               MOVE 'WRONG TYPE:' TO DEF
+               MOVE FS-LTYPE5     TO ABS
+               WRITE OUTREC FROM WS-UPS
+            ELSE
+      * CHECK IF LOAN ID IS GIVEN OR NOT
+              IF FS-LID5 NOT = SPACES
+      * CHECK IF LOAN ID IS VALID OR NOT FROM LOAN TABLE
+               EXEC SQL
+                    SELECT LID INTO :HV1-LID
+                    FROM LOAN
+                    WHERE LID = :HV-LID
+               END-EXEC
+               IF SQLCODE NOT = 0
+                  MOVE REC5         TO REC
+                  MOVE 'WRONG LID:' TO DEF
+                  MOVE FS-LID5      TO ABS
+                  WRITE OUTREC FROM WS-UPS
+               ELSE
+      * CHECK IF AMOUNT ENTERED IS A NUMBER OR NOT OR IF MISSING
+                     IF FS-LAMT5 IS NUMERIC
+                        EXEC SQL
+                             SELECT OUTAMT INTO :HV1-OUTAMT
+                             FROM LOANTRANS
+                             WHERE CID = :HV1-CID
+                             AND   TYPE = :HV1-TYPE
+                        END-EXEC
+      * CHECK IF REPAID AMOUNT IS GREATER THAN LOAN AMOUNT
+                        IF FS-LAMT5 <= HV1-OUTAMT
+                           COMPUTE HV1-OUTAMT = HV1-OUTAMT - FS-LAMT5
+                           PERFORM DATE-PARA
+                           MOVE DATE2 TO HV1-CDATE
+                           IF HV1-OUTAMT = 0
+      * IF LOAN IS COMPLETELY REPAID THEN CLOSE THE STATUS, CLOSING
+      * DATE AND AMOUNT. UPDATE LOAN TRANSACTION FILE
+                              MOVE 'C' TO HV1-STATUS
+                              EXEC SQL
+                                   UPDATE LOANTRANS
+                                   SET STATUS = :HV1-STATUS,
+                                   CDATE = :HV1-CDATE,
+                                   OUTAMT = :HV1-OUTAMT
+                                   WHERE CID = :HV1-CID
+                                   AND   TYPE = :HV1-TYPE
+                              END-EXEC
+                           END-IF
+      * UPDATE ONLY AMOUNT IN LOAN TRANSACTION FILE
+                           EXEC SQL
+                                UPDATE LOANTRANS
+                                SET OUTAMT = :HV1-OUTAMT
+                                WHERE CID = :HV1-CID
+                                AND   TYPE = :HV1-TYPE
+                           END-EXEC
+                        ELSE
+                           MOVE REC5           TO REC
+                           MOVE 'OVERPAID AMT' TO DEF
+                           MOVE FS-LAMT5       TO ABS
+                           WRITE OUTREC FROM WS-UPS
+                        END-IF
+                    ELSE
+      * CHECK IF AMOUNT IS WRONG OR MISSING
+                      MOVE REC5     TO REC
+                      MOVE FS-LAMT5 TO ABS
+                      IF FS-LAMT5 = SPACES
+                        MOVE 'AMT MISSING' TO DEF
+                      ELSE
+                        MOVE 'AMT ENTERED IS WRONG' TO DEF
+                      END-IF
+                      WRITE OUTREC FROM WS-UPS
+                    END-IF
+                 END-IF
+                 ELSE
+                    PERFORM CID-PARA
+                END-IF
+              END-IF
+              ELSE
+                 MOVE REC5            TO REC
+                 MOVE 'LTYPE MISSING' TO DEF
+                 MOVE FS-LTYPE5       TO ABS
+                 WRITE OUTREC FROM WS-UPS
+               END-IF
+              END-IF
+            ELSE
+              PERFORM ID-PARA
+            END-IF.
+
+      *CHECK IF LOAN ID IS MISSING OR NOT
+       CID-PARA.
+            MOVE REC5          TO REC
+            IF HV-LID = SPACES
+            MOVE 'LID MISSING' TO DEF
+            ELSE
+            MOVE 'LID WRONG:'  TO DEF
+            END-IF
+            MOVE HV-LID        TO ABS
+            WRITE OUTREC FROM WS-UPS.
+
+      *CHECK FOR SPACES GIVEN UNBETWEEN THE INPUTS
+       COUNTSPACES.
+            UNSTRING INPUT-VAR
+                     DELIMITED BY SPACES
+                     INTO ARR (1) ARR (2)
+                     TALLYING AC
+            END-UNSTRING.

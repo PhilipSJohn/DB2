@@ -1,0 +1,150 @@
+      *PGM HELPS IN MAKING THE LOAN REPORT FOR THE LOAN TRANS *         00001000
+      *AUTHOR: TEAM 1                                         *         00002000
+      *HV1 REFERS TO LOAN TRANSACTION PARAMETER               *         00002100
+      *OUTREC IS FOR THE PS FILE                              *         00002200
+      *********************************************************         00003000
+       ID            DIVISION.                                          00010000
+       PROGRAM-ID. RPRT1.                                               00020000
+       ENVIRONMENT   DIVISION.                                          00030000
+       INPUT-OUTPUT  SECTION.                                           00040000
+       FILE-CONTROL.                                                    00050000
+            SELECT RPTFILE ASSIGN TO DD3                                00080000
+            FILE STATUS IS WS-FS.                                       00090000
+       DATA          DIVISION.                                          00100000
+       FILE          SECTION.                                           00110000
+       FD RPTFILE.                                                      00181000
+       01 OUTREC                PIC X(80).                              00190001
+       WORKING-STORAGE SECTION.                                         00200000
+                    EXEC SQL                                            00201000
+                        INCLUDE LOANTRAN                                00202000
+                    END-EXEC                                            00203000
+                    EXEC SQL                                            00204000
+                        INCLUDE SQLCA                                   00205000
+                    END-EXEC                                            00206000
+       01 DREC.                                                         00207001
+          05 TYPE1              PIC X(2).                               00208001
+          05                    PIC X(17) VALUE SPACES.                 00209001
+          05 CID1               PIC X(5).                               00209101
+          05                    PIC X(13) VALUE SPACES.                 00209201
+          05 LID1               PIC X(5).                               00209301
+          05                    PIC X(7)  VALUE SPACES.                 00209401
+          05 ODATE1             PIC 99/99/9999.                         00209501
+          05                    PIC X(6) VALUE SPACES.                  00209601
+          05 OUTAMT1            PIC 9(7).                               00209701
+          05                    PIC X(08) VALUE SPACES.                 00209801
+       01 HEAD.                                                         00210000
+          05                    PIC X(13)  VALUE "LOAN CATEGORY".       00221000
+          05                    PIC X(3)   VALUE SPACES.                00222000
+          05                    PIC X(15)  VALUE "CUSTOMER NUMBER".     00223000
+          05                    PIC X(3)   VALUE SPACES.                00224000
+          05                    PIC X(11)  VALUE "LOAN NUMBER".         00225000
+          05                    PIC X(3)   VALUE SPACES.                00226000
+          05                    PIC X(15)  VALUE "DATE OF OPENING".     00227000
+          05                    PIC X(3)   VALUE SPACES.                00228000
+          05                    PIC X(14)  VALUE "AMOUNT".              00229000
+       01 WS-PAGE.                                                      00230000
+          05                    PIC X(12)   VALUE "INDOBANK LTD".       00231000
+          05                    PIC X(48)   VALUE SPACES.               00240000
+          05 PG                 PIC X(8)    VALUE "PAGE NO:" .          00250000
+          05 WS-PG              PIC 99      VALUE 01.                   00251000
+          05                    PIC X(10)   VALUE SPACES.               00251100
+       01 WS-HEAD1.                                                     00252000
+          05                    PIC X(59)   VALUE SPACES.               00253000
+          05                    PIC X(5)    VALUE "DATE:".              00254000
+          05 WS-DATE.                                                   00255000
+                10 WS-D         PIC 99.                                 00256000
+                10              PIC X       VALUE '/'.                  00257000
+                10 WS-M         PIC 99.                                 00258000
+                10              PIC X       VALUE '/'.                  00259000
+                10 WS-Y         PIC 99.                                 00260000
+       01 WS-HEAD3.                                                     00261000
+          05                  PIC X(28)     VALUE SPACES.               00262000
+          05                  PIC X(52) VALUE "OUTSTANDING LOAN REPORT".00263000
+       01 WS-FOOT.                                                      00264000
+          05                  PIC X(32) VALUE "OUTSTANDING AMOUNT GRAND 00265000
+      -                           "TOTAL: ".                            00266000
+          05 WS-GRAND-TOTAL   PIC 9(7)  VALUE 0.                        00267000
+       01 WS-DOP1.                                                      00268000
+              10 WS-DD          PIC 99.                                 00268100
+              10                PIC X   VALUE '/'.                      00268200
+              10 WS-MM          PIC 99.                                 00268300
+              10                PIC X   VALUE '/'.                      00268400
+              10 WS-YYYY        PIC 9999.                               00268500
+                                                                        00269000
+       77 WS-DOP               PIC 999999.                              00270000
+       77 WS-FS                PIC 99.                                  00370000
+       77 WS-LCTR              PIC 99    VALUE 0.                       00371000
+       77 WS-LINE              PIC X(80) VALUE ALL '-'.                 00372000
+       PROCEDURE     DIVISION.                                          00380000
+       MAIN-PARA.                                                       00390000
+            MOVE 'O' TO HV1-STATUS                                      00390100
+                    EXEC SQL                                            00390200
+                        DECLARE LOANCUR CURSOR FOR                      00390300
+                        SELECT TYPE,CID,LID,ODATE,OUTAMT,STATUS         00390400
+                        FROM LOANTRANS                                  00390500
+                        WHERE STATUS = :HV1-STATUS                      00390600
+                        ORDER BY TYPE,CID                               00390700
+                    END-EXEC.                                           00390800
+            ACCEPT WS-DOP FROM DATE                                     00391000
+            MOVE WS-DOP(5:2) TO WS-D                                    00392000
+            MOVE WS-DOP(3:2) TO WS-M                                    00393000
+            MOVE WS-DOP(1:2) TO WS-Y                                    00394000
+            PERFORM OPEN-PARA                                           00400000
+            PERFORM SUMMARY-PARA                                        00401000
+            PERFORM READ-PARA UNTIL SQLCODE NOT = 0                     00410000
+            WRITE OUTREC FROM WS-FOOT                                   00410200
+            EXEC SQL                                                    00411000
+               CLOSE LOANCUR                                            00411100
+            END-EXEC                                                    00411200
+            CLOSE RPTFILE                                               00412000
+            DISPLAY "CLOSE STATUS " WS-FS                               00413000
+            STOP RUN.                                                   00420000
+       OPEN-PARA.                                                       00430000
+             OPEN OUTPUT RPTFILE                                        00450000
+             DISPLAY "OPEN STATUS " WS-FS                               00460000
+             EXEC SQL                                                   00460100
+                OPEN LOANCUR                                            00460200
+             END-EXEC.                                                  00460300
+       CNTRL-BREAK.                                                     00460400
+               ADD 1 TO WS-PG                                           00460500
+               WRITE OUTREC FROM WS-HEAD1                               00460600
+               WRITE OUTREC FROM WS-PAGE                                00460700
+               WRITE OUTREC FROM HEAD                                   00460800
+               WRITE OUTREC FROM WS-LINE                                00460900
+               MOVE 0 TO WS-LCTR.                                       00461100
+       SUMMARY-PARA.                                                    00461200
+               WRITE OUTREC FROM WS-HEAD1                               00461300
+               WRITE OUTREC FROM WS-PAGE                                00461400
+               WRITE OUTREC FROM WS-HEAD3                               00461500
+               WRITE OUTREC FROM HEAD                                   00462000
+               WRITE OUTREC FROM WS-LINE.                               00462100
+       READ-PARA.                                                       00570000
+             EXEC SQL                                                   00580000
+                FETCH LOANCUR INTO :HV1-TYPE,:HV1-CID,                  00590000
+                       :HV1-LID,:HV1-ODATE,:HV1-OUTAMT                  00600000
+             END-EXEC                                                   00620000
+             IF SQLCODE = 0                                             00621000
+                 PERFORM WRITE-PARA                                     00630000
+             ELSE                                                       00631000
+                 DISPLAY "SQLCODE" SQLCODE                              00632000
+             END-IF.                                                    00633000
+       WRITE-PARA.                                                      00640000
+      * DISPLAY NEXT PAGE AFTER EVERY CNTR                              00640100
+             IF (WS-LCTR > 2) AND (SQLCODE NOT = 100)                   00641000
+                PERFORM CNTRL-BREAK                                     00642000
+             END-IF                                                     00643000
+             INITIALIZE OUTREC                                          00650000
+             MOVE HV1-TYPE       TO TYPE1                               00651000
+             MOVE HV1-CID        TO CID1                                00660000
+             MOVE HV1-LID        TO LID1                                00670000
+             MOVE HV1-ODATE(9:2) TO WS-DD                               00680000
+             MOVE HV1-ODATE(6:2) TO WS-MM                               00681000
+             MOVE HV1-ODATE(1:4) TO WS-YYYY                             00682000
+             MOVE WS-DOP1        TO ODATE1                              00683000
+             MOVE HV1-OUTAMT     TO OUTAMT1                             00690000
+             ADD HV1-OUTAMT      TO WS-GRAND-TOTAL                      00691000
+             WRITE OUTREC FROM DREC                                     00700001
+             ADD 1 TO WS-LCTR                                           00701000
+             IF WS-FS NOT = 0                                           00710000
+                DISPLAY "WRITE FAILED"                                  00720000
+             END-IF.                                                    00730000
